@@ -34,7 +34,7 @@ var init = function(config, onReady) {
 			// titanium v5.x +
 			bytesC.line = line.split('const/16 v0, ').join('').trim();
 			bytesC.bufferlen = classes.integer.decodeSync(bytesC.line);
-			bytesC.charbuf = classes.charbuf.allocate(bytesC.bufferlen);
+			bytesC.charbuf = classes.charbuf.allocateSync(bytesC.bufferlen);
 		} else if (bytesC.start && line.indexOf('const-string v1')!=-1) {
 			// content
 			bytesC.line = line.split('const-string v1, "').join('').trim();
