@@ -7,7 +7,7 @@ var java = require('java');
 java.classpath.push('java/commons-lang-2.6.jar');
 
 var resp = {};
-var global = {};
+var meta = {};
 var classes = {
 	charset 	: 	java.import('java.nio.charset.Charset'),
 	integer 	: 	java.import('java.lang.Integer'),
@@ -45,7 +45,30 @@ var init = function(config, onReady) {
 			bytesC.charbuf.rewind();
 			console.log('decoding bytes ... takes some time');
 			bytesC.assetBytes = classes.charset.forNameSync('ISO-8859-1').encodeSync(bytesC.charbuf).arraySync();
-			onReady(bytesC);
+			//read file byte ranges from AssetCryptImpl.java
+			var passed_maps = false;
+			console.log('extracting file ranges ...');
+			meta.totalBytes = 0;
+			lineReader.eachLine('test/AssetCryptImpl.java', function(line2, last2) {
+				var tmp = {};
+				if (line2.indexOf('hashmap.put')!=-1) {
+					tmp.file = line2.split(',')[0].split('hashmap.put(').join('').split('"').join('').trim();
+					tmp.offset = line2.split(',')[1].split('new Range(').join('').trim();
+					tmp.length = line2.split(',')[2].split('));').join('').trim();
+					resp[tmp.file] = {
+						offset 	: 	classes.integer.decodeSync(tmp.offset),
+						bytes 	: 	classes.integer.decodeSync(tmp.length)
+					};
+					meta.totalBytes += resp[tmp.file].bytes;
+					passed_maps = true;
+				} else {
+					if (passed_maps) {
+						onReady(bytesC, resp);
+						return false;
+					}
+				}
+			});
+			
 		}
 	});
 	//bytesC.array = classes.charset.forName('ISO-8859-1'); //.encode(bytesC.charbuf).array();
@@ -73,6 +96,8 @@ var filterDataInRange = function(bytes, offset, length) {
 
 };
 
-init({}, function(info) {
-	console.log(info);
+init({}, function(info, full) {
+	//console.log(info);
+	console.log(full);
+	console.log(meta);
 });
