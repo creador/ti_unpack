@@ -7,7 +7,11 @@ var java = require('java');
 java.classpath.push('java/commons-lang-2.6.jar');
 
 var resp = {};
-var meta = {};
+var meta = {
+	totalBytes 	: 	0,
+	ti_version 	: 	-1,
+	alloy 		: 	false
+};
 var classes = {
 	charset 	: 	java.import('java.nio.charset.Charset'),
 	integer 	: 	java.import('java.lang.Integer'),
@@ -27,11 +31,13 @@ var init = function(config, onReady) {
 			bytesC.start = true;
 		} else if (bytesC.start && line.indexOf('const v0, ')!=-1) {
 			// titanium < v5
+			meta.ti_version = -5;
 			bytesC.line = line.split('const v0, ').join('').trim();
 			bytesC.bufferlen = classes.integer.decodeSync(bytesC.line);
 			bytesC.charbuf = classes.charbuf.allocateSync(bytesC.bufferlen);
 		} else if (bytesC.start && line.indexOf('const/16 v0, ')!=-1) {
 			// titanium v5.x +
+			meta.ti_version = 5;
 			bytesC.line = line.split('const/16 v0, ').join('').trim();
 			bytesC.bufferlen = classes.integer.decodeSync(bytesC.line);
 			bytesC.charbuf = classes.charbuf.allocateSync(bytesC.bufferlen);
@@ -44,7 +50,10 @@ var init = function(config, onReady) {
 		} else if (line.indexOf('rewind()Ljava/nio/Buffer;')!=-1) {
 			bytesC.charbuf.rewind();
 			console.log('decoding bytes ... takes some time');
-			bytesC.assetBytes = classes.charset.forNameSync('ISO-8859-1').encodeSync(bytesC.charbuf).arraySync();
+			bytesC.assetBytes = classes.charset.forNameSync('ISO-8859-1').encodeSync(bytesC.charbuf).arraySync(function(ll) {
+				console.log('ll:',ll);
+			});
+			console.log('assetBytes:',bytesC.assetBytes)
 			//read file byte ranges from AssetCryptImpl.java
 			var passed_maps = false;
 			console.log('extracting file ranges ...');
@@ -59,6 +68,7 @@ var init = function(config, onReady) {
 						offset 	: 	classes.integer.decodeSync(tmp.offset),
 						bytes 	: 	classes.integer.decodeSync(tmp.length)
 					};
+					resp[tmp.file].content = filterDataInRange(bytesC.assetBytes, resp[tmp.file].offset, resp[tmp.file].bytes);
 					meta.totalBytes += resp[tmp.file].bytes;
 					passed_maps = true;
 				} else {
@@ -93,8 +103,11 @@ var unpack = function(SmaliBytes) {
 };
 
 var filterDataInRange = function(bytes, offset, length) {
-
+	var _bytes = java.newArray("java.lang.Byte",bytes);
+	var _length = _bytes.length-1;
+	console.log('_length:'+_length,_bytes);
 };
+
 
 init({}, function(info, full) {
 	//console.log(info);
