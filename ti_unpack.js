@@ -25,65 +25,73 @@ var init = function(config, onReady) {
 	// get bytes from smali
 	var bytesC = { start:false, bufferlen:0, charbuf:'', line:'', array:[] };
 	var count = 0;
-	lineReader.eachLine('test/AssetCryptImpl.smali', function(line, last){
-		bytesC.line = line;
-		if (line.indexOf('private static initAssetsBytes()Ljava/nio/CharBuffer')!=-1) {
-			bytesC.start = true;
-		} else if (bytesC.start && line.indexOf('const v0, ')!=-1) {
-			// titanium < v5
-			meta.ti_version = -5;
-			bytesC.line = line.split('const v0, ').join('').trim();
-			bytesC.bufferlen = classes.integer.decodeSync(bytesC.line);
-			bytesC.charbuf = classes.charbuf.allocateSync(bytesC.bufferlen);
-		} else if (bytesC.start && line.indexOf('const/16 v0, ')!=-1) {
-			// titanium v5.x +
-			meta.ti_version = 5;
-			bytesC.line = line.split('const/16 v0, ').join('').trim();
-			bytesC.bufferlen = classes.integer.decodeSync(bytesC.line);
-			bytesC.charbuf = classes.charbuf.allocateSync(bytesC.bufferlen);
-		} else if (bytesC.start && line.indexOf('const-string v1')!=-1) {
-			// content
-			bytesC.line = line.split('const-string v1, "').join('').trim();
-			bytesC.line = bytesC.line.slice(0,-1); // remove last " char
-			bytesC.line = classes.escapeu.unescapeJavaSync(bytesC.line);
-			bytesC.charbuf.append(bytesC.line);
-		} else if (line.indexOf('rewind()Ljava/nio/Buffer;')!=-1) {
-			bytesC.charbuf.rewind();
-			console.log('decoding bytes ...');
-			/* */
-			bytesC.assetBytes = classes.charset.forNameSync('ISO-8859-1').encodeSync(bytesC.charbuf).arraySync();
-			console.log('converting into java array of bytes ... takes some time');
-			var iii, _cnt=0, _inbytes = [];
-			for (iii in bytesC.assetBytes) {
-				_inbytes.push(java.newByte(bytesC.assetBytes[iii]));
-			}
-			_inbytes2 = java.newArray("byte",_inbytes);
-			//read file byte ranges from AssetCryptImpl.java
-			var passed_maps = false;
-			console.log('extracting file ranges ...');
-			meta.totalBytes = 0;
-			lineReader.eachLine('test/AssetCryptImpl.java', function(line2, last2) {
-				var tmp = {};
-				if (line2.indexOf('hashmap.put')!=-1) {
-					tmp.file = line2.split(',')[0].split('hashmap.put(').join('').split('"').join('').trim();
-					tmp.offset = line2.split(',')[1].split('new Range(').join('').trim();
-					tmp.length = line2.split(',')[2].split('));').join('').trim();
-					resp[tmp.file] = {
-						offset 	: 	classes.integer.decodeSync(tmp.offset),
-						bytes 	: 	classes.integer.decodeSync(tmp.length)
-					};
-					resp[tmp.file].content = filterDataInRange(tmp.file, _inbytes2, resp[tmp.file].offset, resp[tmp.file].bytes);
-					meta.totalBytes += resp[tmp.file].bytes;
-					passed_maps = true;
-				} else {
-					if (passed_maps) {
-						onReady(bytesC, resp);
-						return false;
-					}
+	// config
+	var _default = { smali: '', java:'' };
+	for (var _c in config) _default[_c] = config[_c];
+	// start
+	if (_default.smali!='' && _default.java!='') {
+		lineReader.eachLine(_default.smali, function(line, last){
+			bytesC.line = line;
+			if (line.indexOf('private static initAssetsBytes()Ljava/nio/CharBuffer')!=-1) {
+				bytesC.start = true;
+			} else if (bytesC.start && line.indexOf('const v0, ')!=-1) {
+				// titanium < v5
+				meta.ti_version = -5;
+				bytesC.line = line.split('const v0, ').join('').trim();
+				bytesC.bufferlen = classes.integer.decodeSync(bytesC.line);
+				bytesC.charbuf = classes.charbuf.allocateSync(bytesC.bufferlen);
+			} else if (bytesC.start && line.indexOf('const/16 v0, ')!=-1) {
+				// titanium v5.x +
+				meta.ti_version = 5;
+				bytesC.line = line.split('const/16 v0, ').join('').trim();
+				bytesC.bufferlen = classes.integer.decodeSync(bytesC.line);
+				bytesC.charbuf = classes.charbuf.allocateSync(bytesC.bufferlen);
+			} else if (bytesC.start && line.indexOf('const-string v1')!=-1) {
+				// content
+				bytesC.line = line.split('const-string v1, "').join('').trim();
+				bytesC.line = bytesC.line.slice(0,-1); // remove last " char
+				bytesC.line = classes.escapeu.unescapeJavaSync(bytesC.line);
+				bytesC.charbuf.append(bytesC.line);
+			} else if (line.indexOf('rewind()Ljava/nio/Buffer;')!=-1) {
+				bytesC.charbuf.rewind();
+				console.log('decoding bytes ...');
+				/* */
+				bytesC.assetBytes = classes.charset.forNameSync('ISO-8859-1').encodeSync(bytesC.charbuf).arraySync();
+				console.log('converting into java array of bytes ... takes some time');
+				var iii, _cnt=0, _inbytes = [];
+				for (iii in bytesC.assetBytes) {
+					_inbytes.push(java.newByte(bytesC.assetBytes[iii]));
 				}
-			});
-		}
-	});
+				_inbytes2 = java.newArray("byte",_inbytes);
+				//read file byte ranges from AssetCryptImpl.java
+				var passed_maps = false;
+				console.log('extracting file ranges ...');
+				meta.totalBytes = 0;
+				lineReader.eachLine(_default.java, function(line2, last2) {
+					var tmp = {};
+					if (line2.indexOf('hashmap.put')!=-1) {
+						tmp.file = line2.split(',')[0].split('hashmap.put(').join('').split('"').join('').trim();
+						tmp.offset = line2.split(',')[1].split('new Range(').join('').trim();
+						tmp.length = line2.split(',')[2].split('));').join('').trim();
+						resp[tmp.file] = {
+							offset 	: 	classes.integer.decodeSync(tmp.offset),
+							bytes 	: 	classes.integer.decodeSync(tmp.length)
+						};
+						resp[tmp.file].content = filterDataInRange(tmp.file, _inbytes2, resp[tmp.file].offset, resp[tmp.file].bytes);
+						meta.totalBytes += resp[tmp.file].bytes;
+						passed_maps = true;
+					} else {
+						if (passed_maps) {
+							onReady(false, resp);
+							return false;
+						}
+					}
+				});
+			}
+		});
+	} else {
+		onReady(true,{});
+	}
 };
 
 var filterDataInRange = function(filename, ibytes, offset, length) {
@@ -144,12 +152,12 @@ var unpack2dir = function(obj) {
 
 };
 
-exports.init = init;
+exports.extract = init;
 exports.unpack2dir = unpack2dir;
 
 /* uncomment for testing
-init({}, function(info, full) {
-	//console.log(info);
+init({ smali:'test/AssetCryptImpl.smali', java:'test/AssetCryptImpl.java' }, 
+	   function(err, full) {
 	console.log(full);
 	console.log(meta);
 });*/

@@ -13,6 +13,7 @@
   "author": "Pablo Schaffner",
   "license": "MIT",
   "dependencies": {
+    "cheerio": "^0.22.0",
     "java": "^0.8.0",
     "line-reader": "^0.4.0"
   }
