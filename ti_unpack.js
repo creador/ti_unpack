@@ -49,11 +49,15 @@ var init = function(config, onReady) {
 			bytesC.charbuf.append(bytesC.line);
 		} else if (line.indexOf('rewind()Ljava/nio/Buffer;')!=-1) {
 			bytesC.charbuf.rewind();
-			console.log('decoding bytes ... takes some time');
-			bytesC.assetBytes = classes.charset.forNameSync('ISO-8859-1').encodeSync(bytesC.charbuf).arraySync(function(ll) {
-				console.log('ll:',ll);
-			});
-			console.log('assetBytes:',bytesC.assetBytes)
+			console.log('decoding bytes ...');
+			/* */
+			bytesC.assetBytes = classes.charset.forNameSync('ISO-8859-1').encodeSync(bytesC.charbuf).arraySync();
+			console.log('converting into java array of bytes ... takes some time');
+			var iii, _cnt=0, _inbytes = [];
+			for (iii in bytesC.assetBytes) {
+				_inbytes.push(java.newByte(bytesC.assetBytes[iii]));
+			}
+			_inbytes2 = java.newArray("byte",_inbytes);
 			//read file byte ranges from AssetCryptImpl.java
 			var passed_maps = false;
 			console.log('extracting file ranges ...');
@@ -68,7 +72,7 @@ var init = function(config, onReady) {
 						offset 	: 	classes.integer.decodeSync(tmp.offset),
 						bytes 	: 	classes.integer.decodeSync(tmp.length)
 					};
-					resp[tmp.file].content = filterDataInRange(bytesC.assetBytes, resp[tmp.file].offset, resp[tmp.file].bytes);
+					resp[tmp.file].content = filterDataInRange(tmp.file, _inbytes2, resp[tmp.file].offset, resp[tmp.file].bytes);
 					meta.totalBytes += resp[tmp.file].bytes;
 					passed_maps = true;
 				} else {
@@ -78,39 +82,74 @@ var init = function(config, onReady) {
 					}
 				}
 			});
-			
 		}
 	});
-	//bytesC.array = classes.charset.forName('ISO-8859-1'); //.encode(bytesC.charbuf).array();
-	//onReady(bytesC);
-	/*
-	var reply = {};
-	fs.readFile('test/AssetCryptImpl.java','utf8', function(err, data1) {
-		if (err) throw err;
-		reply.java = data1;
-		fs.readFile('test/AssetCryptImpl.smali','utf8', function(err2, data2) {
-			if (err2) throw err2;
-			reply.smali = data2;
-			onReady(reply);
-		});
-	});
-	// read AssetCryptImpl.java (for content)
-	*/
 };
 
-var unpack = function(SmaliBytes) {
+var filterDataInRange = function(filename, ibytes, offset, length) {
+	var _resp = '', _respb = '', _bytes_len=ibytes.length;
+	var key = java.import('javax.crypto.spec.SecretKeySpec');
+	// FIRST ATTEMPT
+	try {
+		// titanium below 3.2.2 and 3.4.0 decryption requires byteslen - 1
+		_bytes_len = ibytes.length-1;
+		var secretKeySpec = new key(	ibytes,
+										_bytes_len - classes.integer.decodeSync("0x10"), 
+										classes.integer.decodeSync("0x10"), 
+										'AES');
+		var _cipher = java.import('javax.crypto.Cipher').getInstanceSync('AES');
+		var _decrypt_mode = 2; 	//cipher["DECRYPT_MODE"];
+		_cipher.initSync(_decrypt_mode, secretKeySpec);
+		try {
+			_respb = _cipher.doFinalSync(ibytes, offset, length);
+			_resp = String.fromCharCode.apply(null, new Uint16Array(_respb));
+		} catch(e1a) {
+			_respb = _cipher.doFinalSync(ibytes, offset-1, length);	//some files have the offset padded
+			_resp = String.fromCharCode.apply(null, new Uint16Array(_respb));
+		}
+
+	} catch(e1) {
+		_resp = '';	
+	}
+	// SECOND ATTEMPT
+	if (_resp=='') {
+		try {
+			// titanium over v3.4.0
+			_bytes_len = ibytes.length;
+			var secretKeySpec = new key(	ibytes,
+											_bytes_len - classes.integer.decodeSync("0x10"), 
+											classes.integer.decodeSync("0x10"), 
+											'AES');
+			var _cipher = java.import('javax.crypto.Cipher').getInstanceSync('AES');
+			var _decrypt_mode = 2; 	//cipher["DECRYPT_MODE"];
+			_cipher.initSync(_decrypt_mode, secretKeySpec);
+			try {
+				_respb = _cipher.doFinalSync(ibytes, offset, length);
+				_resp = String.fromCharCode.apply(null, new Uint16Array(_respb));
+			} catch(e1a) {
+				_respb = _cipher.doFinalSync(ibytes, offset-1, length);	//some files have the offset padded
+				_resp = String.fromCharCode.apply(null, new Uint16Array(_respb));
+			}
+
+		} catch(e2) {
+			_resp = '';
+		}
+	}
+	if (_resp!='') console.log('file:'+filename+', decrypted !');
+	return _resp;
+};
+
+var unpack2dir = function(obj) {
+	// writes the decoded files from memory into the given directory (creating as needed)
 
 };
 
-var filterDataInRange = function(bytes, offset, length) {
-	var _bytes = java.newArray("java.lang.Byte",bytes);
-	var _length = _bytes.length-1;
-	console.log('_length:'+_length,_bytes);
-};
+exports.init = init;
+exports.unpack2dir = unpack2dir;
 
-
+/* uncomment for testing
 init({}, function(info, full) {
 	//console.log(info);
 	console.log(full);
 	console.log(meta);
-});
+});*/
