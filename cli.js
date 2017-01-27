@@ -15,9 +15,9 @@ var _apk, _dir;
 if (args.length==2) {
 	_apk = args[0], _dir = path.join(cur_dir,args[1]); // assume output dir is subdir of current one.
 	if (args[1].charAt(0)==path.sep) {
-		_dir = args[1];	// if directory is a path separator, then we assume its an absolute directory.
+		_dir = args[1];	// if directory starts with a path separator, then we assume its an absolute directory.
 	}
-
+	
 } else {
 	console.log('Appcelerator Titanium - APK unpacker');
 	console.log('Usage: cli apkfile.apk outputdirectory');
