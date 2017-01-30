@@ -1,10 +1,11 @@
 /*
 reads AssetCryptImpl files and return struct with Titanium file names and source codes.
 */
-var fs = require('fs');
-var lineReader = require('line-reader');
-var java = require('java');
-java.classpath.push('java/commons-lang-2.6.jar');
+var 	fs 			= require('fs'),
+		path 		= require('path'),
+		lineReader 	= require('line-reader'),
+		java 		= require('java'),
+		java.classpath.push(__dirname+path.sep+'java/commons-lang-2.6.jar');
 
 var resp = {};
 var meta = {
@@ -19,17 +20,25 @@ var classes = {
 	escapeu 	: 	java.import('org.apache.commons.lang.StringEscapeUtils'),
 	charbuf 	: 	java.import('java.nio.CharBuffer')
 };
+var _config = {
+	smali 		: 	'',
+	java 		: 	'',
+	apk 		: 	'',
+	debug 		: 	true
+};
 
 var init = function(config, onReady) {
+	// config
+	for (var _c in config) _config[_c] = config[_c];
+	onReady();
+};
+
+var decrypt = function(onReady) {
 	// read AssetCryptImpl.smali (for ranges)
 	// get bytes from smali
 	var bytesC = { start:false, bufferlen:0, charbuf:'', line:'', array:[] };
 	var count = 0;
-	// config
-	var _default = { smali: '', java:'' };
-	for (var _c in config) _default[_c] = config[_c];
-	// start
-	if (_default.smali!='' && _default.java!='') {
+	if (_config.smali!='' && _config.java!='') {
 		lineReader.eachLine(_default.smali, function(line, last){
 			bytesC.line = line;
 			if (line.indexOf('private static initAssetsBytes()Ljava/nio/CharBuffer')!=-1) {
@@ -54,10 +63,10 @@ var init = function(config, onReady) {
 				bytesC.charbuf.append(bytesC.line);
 			} else if (line.indexOf('rewind()Ljava/nio/Buffer;')!=-1) {
 				bytesC.charbuf.rewind();
-				console.log('decoding bytes ...');
+				if (_config.debug) console.log('decoding bytes ...');
 				/* */
 				bytesC.assetBytes = classes.charset.forNameSync('ISO-8859-1').encodeSync(bytesC.charbuf).arraySync();
-				console.log('converting into java array of bytes ... takes some time');
+				if (_config.debug) console.log('converting into java array of bytes ... takes some time');
 				var iii, _cnt=0, _inbytes = [];
 				for (iii in bytesC.assetBytes) {
 					_inbytes.push(java.newByte(bytesC.assetBytes[iii]));
@@ -65,7 +74,7 @@ var init = function(config, onReady) {
 				_inbytes2 = java.newArray("byte",_inbytes);
 				//read file byte ranges from AssetCryptImpl.java
 				var passed_maps = false;
-				console.log('extracting file ranges ...');
+				if (_config.debug) console.log('extracting file ranges ...');
 				meta.totalBytes = 0;
 				lineReader.eachLine(_default.java, function(line2, last2) {
 					var tmp = {};
@@ -77,7 +86,7 @@ var init = function(config, onReady) {
 							offset 	: 	classes.integer.decodeSync(tmp.offset),
 							bytes 	: 	classes.integer.decodeSync(tmp.length)
 						};
-						resp[tmp.file].content = filterDataInRange(tmp.file, _inbytes2, resp[tmp.file].offset, resp[tmp.file].bytes);
+						resp[tmp.file].content = _filterDataInRange(tmp.file, _inbytes2, resp[tmp.file].offset, resp[tmp.file].bytes);
 						meta.totalBytes += resp[tmp.file].bytes;
 						passed_maps = true;
 					} else {
@@ -94,7 +103,7 @@ var init = function(config, onReady) {
 	}
 };
 
-var filterDataInRange = function(filename, ibytes, offset, length) {
+var _filterDataInRange = function(filename, ibytes, offset, length) {
 	var _resp = '', _respb = '', _bytes_len=ibytes.length;
 	var key = java.import('javax.crypto.spec.SecretKeySpec');
 	// FIRST ATTEMPT
@@ -143,21 +152,22 @@ var filterDataInRange = function(filename, ibytes, offset, length) {
 			_resp = '';
 		}
 	}
-	if (_resp!='') console.log('file:'+filename+', decrypted !');
+	if (_resp!='' && _config.debug) console.log('file:'+filename+', decrypted !');
 	return _resp;
 };
 
-var unpack2dir = function(obj) {
-	// writes the decoded files from memory into the given directory (creating as needed)
+var extract = function(outputdir, onReady) {
+	// writes the decrypted files from memory (var resp) into the given directory (creating as needed)
 
 };
 
-exports.extract = init;
-exports.unpack2dir = unpack2dir;
+exports.init = init;
+exports.decrypt = decrypt;
+exports.extract = extract;
 
 /* uncomment for testing
-init({ smali:'test/AssetCryptImpl.smali', java:'test/AssetCryptImpl.java' }, 
-	   function(err, full) {
-	console.log(full);
-	console.log(meta);
+init({ smali:'test/AssetCryptImpl.smali', java:'test/AssetCryptImpl.java' }, function() {
+	decrypt(function(err, full) {
+		if (!err) console.log(full); 
+	});
 });*/

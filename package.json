@@ -13,8 +13,13 @@
   "author": "Pablo Schaffner",
   "license": "MIT",
   "dependencies": {
+    "apk_unpack": "^1.1.0",
     "cheerio": "^0.22.0",
     "java": "^0.8.0",
     "line-reader": "^0.4.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/creador/ti_unpack.git"
   }
 }
